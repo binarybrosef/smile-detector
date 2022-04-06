@@ -1,0 +1,1 @@
+Place user-supplied images to be inferenced on in this folder. Then delete this README file before inferencing. 
