@@ -1,36 +1,52 @@
 # smile-detector
-A simple convolutional neural network that classifies face-containing images as smiling or not smiling.
+Applying transfer learning to a MobileNetv2 for binary image classification.
 
-## The Challenge
-A variety of automated systems have been developed that take action contingent upon a human subject's facial expression as determined by imaging their face. In some examples, entry to a facility, location, or experience - such as an amusement park or ride therein - may depend upon human subjects exhibiting particular facial expression(s) in view of a camera. 
+## Objective
+A variety of systems have been developed for classifying human facial expression in images. For example, automated systems exist that take action contingent upon a human subject's facial expression, such as selectively granting access to a facility, location, or experience (e.g., amusement park or ride therein). The classification of facial expression may be sought for many other reasons, such as mood classification. 
 
-This convolutional neural network (CNN) is configured to detect whether human faces in images are smiling or not smiling. This task is inspired by an assignment that is part of the convolutional neural networks course of Coursera/DeepLearning.AI's [Deep Learning Specialization](https://www.coursera.org/specializations/deep-learning). 
+This repository provides convolutional neural networks (CNNs) configured to detect whether human faces in images are smiling or not smiling. CNNs are built from a 154-layer MobileNetv2 pre-trained on ImageNet. 
 
-## The Data
-This CNN is trained on a training set provided by Coursera/DeepLearning.AI consisting of 600 64x64 RGB images. Each image contains a human face and appears to have been captured with the same camera in the same location. A test set consisting of 150 examples is further provided with which to evaluate model performance.
+## MobileNetv2
+MobileNetv2 is a CNN architecture that has gained popularity for its ability to achieve good performance on image data with low computational cost. Identifying features of the MobileNetv2 architecture include bottleneck layers, residual connections, and depthwise convolutions. 
 
-Unfortunately, the dataset provided by Coursera/DeepLearning.AI appears to be proprietary and only accessible by obtaining access to the Deep Learning Specialization. As such, this dataset is not provided as part of this repository.  However, models can be evaluated against any face-containing RGB image that is of size 64x64. 
+## Transfer Learning and Training Data
+Transfer learning is performed using a training dataset consisting of 64x64 greyscale face-containing images (9476 negative examples, 3690 positive examples). The dataset is publicly accessible from this [Github repository](https://github.com/hromi/SMILEsmileD).
 
-Given the narrow distribution formed by this dataset - images taken with the same camera in the same location, possibly under a relatively common set of lighting conditions and distances between subject and camera - the CNN, when merely trained on this dataset, tends to generalize poorly. As such, the CNN is further trained on a [supplemental dataset](https://github.com/hromi/SMILEsmileD) consisting of 64x64 greyscale images (9476 negative examples, 3690 positive examples).
+Two different approaches to transfer learning are explored to ascertain the levels of performance that these approaches can achieve:
+- In the first approach, transfer learning on the training dataset is performed with only the final, dense output layer of a pre-trained MobileNetv2 unfrozen. This is achieved by importing a MobileNetv2 model with `include_top=False` and adding a new, trainable dense output layer to the model.
+- In the second approach, transfer learning on the training dataset is performed with an adjustable number of final layers in a pre-trained MobileNetv2 unfrozen. By default, layer 118 and all subsequent layers are unfrozen. This is achieved by setting the `trainable` attribute of the unfrozen layers to `True`. A reduced learning rate is used in the second approach as compared to the first approach.
 
-## The Model
-A CNN of nearly minimial simplicity is employed to classify human faces in images as smiling or not similing. The CNN consists of the following layers:
-- zero-padding (3 pixels) 
-- 2D convolution (32 filters, kernel size of 7, stride of 1)
-- batch normalization (along color channels axis)
-- ReLU activation
-- 2D max pooling
-- flattening
-- dense with sigmoid activation
+## Data Augmentation
+To improve model performance, data augmentation is performed by randomly flipping and rotating training images. The `augment_data()` function returns a sequential Tensorflow model comprising `RandomFlip` and `RandomRotation` layers for this purpose.
 
-The CNN is constructed using TensorFlow's Sequential API. Data processing merely consists of scaling pixel values. 
+## Model Construction and Script Use
+`script.py` implements transfer learning of a MobileNetv2 according to the two approaches described above. 
+`custom_model()` returns a functional Tensorflow model comprising a MobileNetv2 pre-trained on ImageNet without its dense output layer, a data augmentation layer by way of `augment_data()`, a preprocessing layer implemented by `tf.keras.applications.mobilenet_v2.preprocess_input`, and "custom" layers at the end of the model consisting of `GlobalAveragePooling2D`, `Dropout`, and `Dense` layers. 
 
-`model.py` constructs, trains, saves, and evaluates the CNN. A saved and trained version of the model is provided in the `model` folder.
+**Important note:** the output of `custom_model()` is a "nested" model that appears to have only eight layers. However, the fifth layer (layer[4]) contains a      154-layer MobileNetv2 instance. Thus, the individual layers of the MobileNetv2 instance can be accessed via `custom_model.layer[4].layers` if `custom_model` is the output from `custom_model()`.
 
-## Inferencing on Unseen Examples
-`inference.py` enables the CNN to be evaluated on user-provided images. To evaluate the CNN on your own images, place images of any size in the `images` folder. Delete the README file before inferencing on these images. `inference.py` resizes, via `resize()`, these images to 64x64 and places the resized images in a new folder named `resized_images`. `inference()` is then called, which loads the trained version of the CNN from the `model` folder, applies the CNN to the images in `resized_images`, and outputs classifications for each image as containing a face that is either smiling or not smiling. 
+`train_frozen_model()` trains a model produced by `custom_model()` - i.e., a pre-trained MobileNetv2 with the aforementioned custom input/output layers - with only the custom dense output layer unfrozen and all other layers frozen.
+
+`train_unfrozen_model()` trains a model produced by `custom_model()` with the layer set by the `limit` keyword argument and all subsequent layers unfrozen. By default, limit = layer 118 of the MobileNetv2.
+
+A trained version of the model produced by `train_frozen_model()` is saved in the `frozen_model` directory, and a trained version of the model produced by `train_unfrozen_model()` is saved in the `unfrozen_model` directory.
+
+`script.py` also provides the functions `show_images()` for displaying a selected number of training images, `show_augmented_image()` for displaying a single augmented training image, and `show_plots()` for visualizing accuracies and losses for the two transfer learning approaches.
+
+## Results
+Losses and accuracies for the training and validation (chosen as 20% of the overall input dataset) datasets are summarized below. For the "frozen" approach in which only the dense output layer is unfrozen:
+![frozen_model](https://user-images.githubusercontent.com/491395/164129693-fe1eee13-9e73-499f-87e2-bef8729b237e.png)
+
+For the "unfrozen" approach in which layer 118 and all layers onward in the MobileNetv2 instance are unfrozen:
+![unfrozen_model](https://user-images.githubusercontent.com/491395/164129706-51b71bb2-e9e8-4e90-b4d3-83fe625f8657.png)
+
+As can be seen from the plots above, the unfrozen approach achieves noticeably superior performance (as measured by validation accuracy) over the frozen approach by the first epoch. Best performance by the unfrozen approach, among five epochs, is achieved by epoch 3, with a validation accuracy of approximately 93%. 
+
+By comparison, the frozen approach achieves a validation accuracy of approximately 86% at epoch 3, although increasing performance is observed with increasing epoch number. It is possible the frozen approach could achieve comparable performance with the unfrozen approach if training is continued past five epochs.
+
+I speculate that the unfrozen approach achieves nearly optimal performance by epoch 1 due to the relative simplicity and low size of the training dataset. Unfreezing the model under this approach would appear to provide a large parameter space with which a good fit to the training set can be achieved in a low amount of training time. 
 
 ## Limitations and Future Development
-While the CNN performs well (approximately 95% accuracy) on the test set provided by Coursera/DeepLearning.AI, suboptimal performance was observed when applying the CNN to a random set of face-containing images obtained via internet image search. As such, the CNN is trained on supplemental data to achieve improved generalization. 
+As mentioned above, improved performance could likely be achieved with the frozen approach by simply training for more epochs. For the unfrozen approach, greater performance is likely obtainable by varying which layers of the MobileNetv2 are frozen/unfrozen. A greater number of training epochs, and variation of which layers are frozen/unfrozen, was not performed due to limitations of the hardware on which this script was executed. 
 
-Further gains in performance could likely be obtained by expanding the training set with randomly chosen images that form a wider distribution to which the CNN can better generalize. It is possible desired performance could be obtained according to this strategy while keeping CNN topology relatively the same. This could result in a model that achieves desired performance with very low computational cost, and thus could be suitable to contexts in which compute resources are constrained (e.g., mobile, low-power/battery-powered contexts). However, as the current CNN topology is very simple, even slight increases in topology complexity could notably increase performance. 
+While the generalization ability of models was not a focus of this project, greater generalization performance beyond what the models can currently achieve could likely be obtained by expanding the training set with randomly chosen images that form a wider distribution to which the models can better generalize. For example, the training set could be expanded with color and/or higher-resolution images.
